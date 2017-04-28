@@ -15,6 +15,12 @@
 (defconst hypertext-data-file-name ".hypertext"
   "Name for the file used to hold values")
 
+(defconst hypertext-node-types '("TRANSCRIPT"
+                                 "RAW"
+                                 "BIO"
+                                 "INFO"
+                                 "LEAF"))
+
 (defun hypertext-scan-directories-upward (dirname)
   "Check given directory and those upward of it in the file tree for .hypertext file"
   (setq curdir (abbreviate-file-name dirname))
@@ -79,3 +85,15 @@ Finds and loads specific values for this directory"
           (let ((new-context '((:lastentry . 0))))
             (puthash root new-context hypertext-context-cache)
             (hypertext-save-context root new-context))))))
+
+(defun hypertext-insert-new-node ()
+  "Insert new org node into org document"
+  (interactive)
+  (save-current-buffer
+    (set-buffer (get-buffer-create "*hypertext*"))
+    (erase-buffer)
+    ;; prompt for the header
+    (let ((heading (read-string "Input heading:"))
+          (outline-regexp "\\*+ "))
+      (when heading
+        (insert (format "* %s\n" heading))))))
