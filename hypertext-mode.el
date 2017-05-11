@@ -50,7 +50,6 @@
 
 (defun hypertext-save-context (&optional root context)
   "Save given context for a given root, values not provided are retrieved from cache
-
 If values are not present in cache, nothing is saved"
   (let* ((real-root (or root (gethash default-directory hypertext-directories-cache)))
          (real-context (or context (gethash real-root hypertext-context-cache))))
@@ -74,6 +73,7 @@ If values are not present in cache, nothing is saved"
 (defun hypertext-activate ()
   "Entry function
 Finds and loads specific values for this directory"
+  (interactive)
   ;; after this call we definitely have something in that folder
   (when (null hypertext-directories-cache)
     (setq hypertext-directories-cache (make-hash-table :test 'equal)))
@@ -86,14 +86,32 @@ Finds and loads specific values for this directory"
             (puthash root new-context hypertext-context-cache)
             (hypertext-save-context root new-context))))))
 
+(defmacro hypertext-with-context (&rest body)
+  `(let* ((root (hypertext-find-root-cache))
+          (context (gethash root hypertext-context-cache)))
+     (if (null context)
+         (message "No context available")
+       ,@body)))
+
 (defun hypertext-insert-new-node ()
   "Insert new org node into org document"
   (interactive)
-  (save-current-buffer
-    (set-buffer (get-buffer-create "*hypertext*"))
-    (erase-buffer)
-    ;; prompt for the header
-    (let ((heading (read-string "Input heading:"))
-          (outline-regexp "\\*+ "))
-      (when heading
-        (insert (format "* %s\n" heading))))))
+  (hypertext-with-context
+   ;; go to the begiiing of next heading
+   (org-forward-heading-same-level 1)
+   (save-current-buffer
+     (set-buffer (get-buffer-create "*hypertext*"))
+     (erase-buffer)
+     ;; prompt for the header
+     (let ((heading (read-string "Input heading: "))
+           (outline-regexp "\\*+ ")
+           (last-index (assoc :lastentry context))
+           (type (completing-read "Type of the info node: " hypertext-node-types nil 'confirm)))
+       (when (and heading type)
+         (insert (format "* %s\n" heading))
+         (org-set-property "ADDED" (format-time-string "%d-%m-%Y %H:%M"))
+         (org-set-property "INDEX" (number-to-string (cdr last-index)))
+         (setcdr last-index (1+ (cdr last-index)))
+         (hypertext-save-context root context)
+         (org-set-property "TYPE" type))))
+   (insert-buffer "*hypertext*")))
