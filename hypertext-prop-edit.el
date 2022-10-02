@@ -4,7 +4,7 @@
 
 (require 'wid-edit)
 
-(defmacro make-lamba-set (bindings &rest callback-actions)
+(defmacro hpe/make-lambda-set (bindings &rest callback-actions)
   "Make set of closures with shared context
 BINDINGS are a list of form (SYMBOL NAME), where SYMBOL is not defined yet
 CALLBACK-ACTIONS are forms that use symbols from bindings
@@ -19,22 +19,22 @@ Return created captures a as a list of forms:
                                         ,(cadr binding)))
                     bindings)))))
 
-(defmacro initialise-and-execute (bindings initialiser &rest callback-actions)
+(defmacro hpe/initialize-and-execute (bindings initialiser &rest callback-actions)
   "BINGINGS have form of ((BINDING-SYMBOL PROMPT) ...)
    INITIALISER somehow assigns values to all of BINDING-SYMBOL
    then it calls CALLBACK-ACTIONS with values of BINDING-SYMBOL set"
-  `(let ((closure-parts (make-lamba-set ,bindings ,@callback-actions)))
+  `(let ((closure-parts (hpe/make-lambda-set ,bindings ,@callback-actions)))
     (,initialiser (cdr closure-parts)
                   (car closure-parts))))
 
-(defun init-values (bindings callback)
-  (loop for (setter desc) in bindings
-        for idx = 0 then (incf idx)
-        do (message "Setting %s" desc)
-           (funcall setter idx))
-  (funcall callback))
+;; (defun init-values (bindings callback)
+;;   (loop for (setter desc) in bindings
+;;         for idx = 0 then (incf idx)
+;;         do (message "Setting %s" desc)
+;;            (funcall setter idx))
+;;   (funcall callback))
 
-(defun get-fresh-buffer (name)
+(defun hpe/get-fresh-buffer (name)
   "Get a fresh new buffer with name NAME.
 If the buffer already exist, clean it up to be like new.
 Beware: it's not quite like new.  Good enough for custom, but maybe
@@ -128,17 +128,17 @@ COMMAND is the command that the item or button runs.
 HELP should be a string that can be used as the help echo property for tooltips
 and the like.")
 
-(defun prop-edit-buffer-create (options callback)
+(defun hpe/prop-edit-buffer-create (options callback)
   "Create a buffer containing OPTIONS.
-Optional NAME is the name of the buffer.
 OPTIONS should be an alist of the form ((SYMBOL LABEL)...), where
 SYMBOL is a customization option, and LABEL is a text for a widget
- for editing that option."
+ for editing that option.
+CALLBACK will be executed after user finishes with options"
   (setq hypertext-prop-edit-callback callback)
   (let ((cur-buf (current-buffer))
         (cur-pos (point)))
     (pop-to-buffer-same-window
-     (custom-get-fresh-buffer "*Hypertext-Properties*")
+     (hpe/get-fresh-buffer "*Hypertext-Properties*")
      t)
     (setq hypertext-prop-edit-return-point (cons cur-buf cur-pos))
     (hypertext-prop-edit-mode)
@@ -176,3 +176,7 @@ SYMBOL is a customization option, and LABEL is a text for a widget
     (widget-setup)
     (goto-char (point-min))))
 
+(defmacro hpe/hypertext-edit-properties (bindings &rest callback-actions)
+  `(hpe/initialize-and-execute ,bindings hpe/prop-edit-buffer-create ,@callback-actions))
+
+(provide 'hypertext-prop-edit)

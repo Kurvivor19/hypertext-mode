@@ -5,6 +5,7 @@
 ;; URL: ?
 
 (require 'dash)
+(require 'hypertext-prop-edit "./hypertext-prop-edit.el")
 
 (defvar hypertext-directories-cache nil
   "A hashmap used to distinguish between all the directories that have different contexts")
@@ -82,9 +83,19 @@ Finds and loads specific values for this directory"
   (let ((root (hypertext-find-root-cache)))
     (unless (gethash root hypertext-context-cache)
       (unless (hypertext-load-context root)
-          (let ((new-context '((:lastentry . 0))))
+        (hpe/hypertext-edit-properties
+         ((:author "Author")
+          (:project_name "Project name")
+          (:description "Description"))
+         ;; outside variables are no longer available
+         (let ((root (hypertext-find-root-cache))
+               (new-context `((:author . ,:author)
+                              (:project_name . ,:project_name)
+                              (:description . ,:description)
+                              (:created . ,(format-time-string "%F %R" (current-time)))
+                              (:lastentry . 0))))
             (puthash root new-context hypertext-context-cache)
-            (hypertext-save-context root new-context))))))
+            (hypertext-save-context root new-context)))))))
 
 (defmacro hypertext-with-context (&rest body)
   `(let* ((root (hypertext-find-root-cache))
