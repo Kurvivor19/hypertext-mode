@@ -5,7 +5,8 @@
 ;; URL: ?
 
 (require 'dash)
-(require 'hypertext-prop-edit "./hypertext-prop-edit.el")
+(load-file (expand-file-name "./hypertext-prop-edit.el"))
+(require 'hypertext-prop-edit)
 
 (defvar hypertext-directories-cache nil
   "A hashmap used to distinguish between all the directories that have different contexts")
@@ -15,6 +16,9 @@
 
 (defconst hypertext-data-file-name ".hypertext"
   "Name for the file used to hold values")
+
+(defconst hypertext-index-file-name "index.org"
+  "Name for the file containing index of org files in project")
 
 (defconst hypertext-node-types '("TRANSCRIPT"
                                  "RAW"
@@ -39,11 +43,16 @@
 
 (defun hypertext-find-root ()
   "Locate folder containing the data file"
-  (let* ((dir default-directory)
-         (cache-value (gethash dir hypertext-directories-cache)))
-    (if cache-value
-        cache-value
-      (or (hypertext-scan-directories-upward dir) dir))))
+  (or
+   (cl-loop with prev-dir
+            for dir = (expand-file-name default-directory)
+                    then (progn (setq prev-dir dir)
+                                (file-name-directory (directory-file-name dir)))
+            for cache-value = (gethash dir hypertext-directories-cache)
+            thereis cache-value
+            until (equal dir prev-dir))
+   (hypertext-scan-directories-upward default-directory)
+   default-directory))
 
 (defun hypertext-find-root-cache ()
   (or (gethash default-directory hypertext-directories-cache)
@@ -92,9 +101,9 @@ Context is a plist with following symbols:
                         :description ,:description
                         :created ,(format-time-string "%F %R" (current-time))
                         :lastentry 0
-                        :file-index '())))
+                        :file-index nil))
      (puthash root new-context hypertext-context-cache)
-     (hypertext-save-context root new-context))))
+     (hypertext-save-context root new-context)))))
 
 (defun hypertext-activate ()
   "Activete hypertext mode context
@@ -111,6 +120,11 @@ See also 'hypertext-create-new-context'."
       (unless (hypertext-load-context root)
         (hypertext-create-new-context)))))
 
+(defun hypertext-deactivate ()
+  "Deactivate hypertext mode context"
+  (interactive)
+  (clrhash hypertext-context-cache))
+
 (defmacro hypertext-with-context (&rest body)
   "Execute BODY with hypertext-mode context if there is one present.
 See 'hypertext-create-new-context' for context contents"
@@ -120,6 +134,25 @@ See 'hypertext-create-new-context' for context contents"
          (message "No context available")
        ,@body
        (hypertext-save-context root context))))
+
+(defun hypertext-regenerate-index-file (index-file-name context)
+  "Regenerate index of org file in the project as INDEX-FILE-NAME from CONTEXT"
+  (with-temp-buffer
+    (find-file index-file-name)
+    (erase-buffer)
+    (let ((author (plist-get context :author))
+          (index (plist-get context :file-index))
+          (project-name (plist-get context :project-name)))
+      (insert
+       (with-output-to-string
+         (princ (format "#+DATE: %s\n" (format-time-string "%F %R" (current-time))))
+         (princ "#+TITLE: Index\n")
+	 (princ "# You shouldn't try to modify this buffer manually\n\n")
+	 (princ (format "* Index for %s\n\n" project-name))
+	 (cl-loop for entry in index
+                  do (princ (format "** %s \n\n" (car entry))))))
+      (save-buffer)
+      (kill-buffer (current-buffer)))))
 
 (defun hypertext-add-org-file (file)
   "Add new file to project"
@@ -137,7 +170,9 @@ See 'hypertext-create-new-context' for context contents"
    (let ((normal-file-name (file-relative-name (expand-file-name file) root))
          (index (plist-get context :file-index)))
      (unless (assq normal-file-name index)
-       (plist-put context :file-index (cons (list normal-file-name root nil) index)))
+       (plist-put context :file-index (cons (list normal-file-name root nil) index))
+       (hypertext-regenerate-index-file (file-name-concat root hypertext-index-file-name)
+                                        context :file-index))
      (find-file file))))
 
 (defun hypertext-insert-new-node ()
